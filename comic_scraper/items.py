@@ -53,7 +53,7 @@ class ComicItem(scrapy.Item):
     original_price = scrapy.Field()  # Original/actual price before discount
     isbn = scrapy.Field()
     cover_image_url = scrapy.Field()
-    uploaded_date = scrapy.Field()  # Date extracted from cover_image_url
+    listing_date = scrapy.Field()  # Date extracted from cover_image_url
     additional_info = scrapy.Field()  # Store additional info table data as dict
     url = scrapy.Field()
     scraped_at = scrapy.Field()

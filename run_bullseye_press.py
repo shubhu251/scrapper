@@ -23,4 +23,3 @@ if __name__ == '__main__':
         print("\n" + "=" * 50)
         print("Scraping encountered errors. Check the output above.")
         sys.exit(result.returncode)
-

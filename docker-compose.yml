@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  bullseye-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bullseye-press-scraper
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Default 02:00 IST daily (20:00 UTC)
+      - CRON_EXPRESSION=0 20 * * *
+      - TZ=Asia/Kolkata
+      - SCHEDULES_FILE=jobs.yml
+      - DATA_DIR=/app/data
+    # command can be overridden to run a one-off crawl:
+    # command: python -m scrapy crawl bullseye_press

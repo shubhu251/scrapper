@@ -67,7 +67,6 @@ ITEM_PIPELINES = {
     "comic_scraper.pipelines.DuplicatesPipeline": 250,
     "comic_scraper.pipelines.ComicScraperPipeline": 300,
     "comic_scraper.pipelines.JsonExportPipeline": 400,
-    "comic_scraper.pipelines.CsvExportPipeline": 500,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
