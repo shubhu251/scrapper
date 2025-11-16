@@ -508,7 +508,7 @@ class BullseyePressSpider(BaseComicSpider):
                     month = int(uploaded_date_match.group(2))
                     day = 25  # Default day as specified
                     # Format as YYYY-MM-DD
-                    item['uploaded_date'] = f"{year:04d}-{month:02d}-{day:02d}"
+                    item['listing_date'] = f"{year:04d}-{month:02d}-{day:02d}"
             
             # Extract series information from title
             # Titles like "Raj Rahman 2", "Yagyaa Origins – Issue 5" contain series info
@@ -834,19 +834,19 @@ class BullseyePressSpider(BaseComicSpider):
             # Strategy 3: Extract from product meta fields (WooCommerce specific)
             product_meta = response.css('.product_meta, .woocommerce-product-details__short-description').get() or ''
             if product_meta:
-                # Look for specific meta fields that might contain artist info
+                # Look for explicit meta labels only (avoid generic capitalized names)
                 meta_text = ' '.join(response.css('.product_meta *::text, .woocommerce-product-details__short-description *::text').getall())
                 if meta_text:
-                    # Extract names from meta (similar pattern)
-                    name_matches = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', meta_text)
-                    for name_match in name_matches:
-                        name = clean_text(name_match)
-                        name_lower = name.lower()
-                        is_invalid = any(keyword in name_lower for keyword in invalid_keywords)
-                        
-                        if not is_invalid and len(name) > 3 and name not in artists:
-                            word_count = len(name.split())
-                            if 1 <= word_count <= 4:
+                    explicit_meta_patterns = [
+                        r'\b(?:artist|art|art by|artwork by|illustrated by|drawn by)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+                    ]
+                    for pattern in explicit_meta_patterns:
+                        m = re.search(pattern, meta_text, re.IGNORECASE)
+                        if m:
+                            name = clean_text(m.group(1))
+                            name_lower = name.lower()
+                            is_invalid = any(keyword in name_lower for keyword in invalid_keywords)
+                            if not is_invalid and len(name) > 3 and name not in artists:
                                 artists.append(name)
             
             # Strategy 4: Extract cover artist from title if mentioned

@@ -11,6 +11,7 @@ import json
 import csv
 from datetime import datetime
 import os
+import os
 
 
 class ComicScraperPipeline:
@@ -27,16 +28,25 @@ class JsonExportPipeline:
         self.filename = None
         self.item_count = 0
         self.timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        os.makedirs('data', exist_ok=True)
+        self.data_dir = os.environ.get('DATA_DIR', 'data')
+        os.makedirs(self.data_dir, exist_ok=True)
+        self.sub_dir = None
     
     def open_spider(self, spider):
         """Initialize single JSON file when spider opens"""
-        # Create filename based on spider name (e.g., bullseye_press -> Bullseye_press)
-        # Split by underscore, capitalize each word, join with underscore
-        spider_name_parts = spider.name.split('_')
-        spider_name = '_'.join(word.capitalize() for word in spider_name_parts)
-        # Format: Bullseye_press_20251114_220809.json
-        self.filename = f'data/{spider_name}_{self.timestamp}.json'
+        # Determine source folder name from spider name (e.g., bullseye_press -> BullseyePress)
+        source_folder = ''.join(word.capitalize() for word in spider.name.split('_'))
+        # Date directory in format YYYY-MM-DD
+        now = datetime.now()
+        date_dir = now.strftime('%Y-%m-%d')
+        # Create dated subfolder: data/YYYY-MM-DD/<SourceFolder>/
+        self.sub_dir = os.path.join(self.data_dir, date_dir, source_folder)
+        os.makedirs(self.sub_dir, exist_ok=True)
+        # File format: YYYY-MM-DD-hh-mm-sss-am.json (milliseconds + am/pm)
+        ms = now.strftime('%f')[:3]
+        ampm = now.strftime('%p').upper()
+        file_ts = now.strftime(f'%Y-%m-%d-%I-%M-%S-{ms}-{ampm}')
+        self.filename = os.path.join(self.sub_dir, f'{file_ts}.json')
         
         # Initialize with empty array
         with open(self.filename, 'w', encoding='utf-8') as f:
@@ -51,9 +61,16 @@ class JsonExportPipeline:
         
         if not self.filename:
             # Fallback if open_spider wasn't called
-            spider_name_parts = spider.name.split('_')
-            spider_name = '_'.join(word.capitalize() for word in spider_name_parts)
-            self.filename = f'data/{spider_name}_{self.timestamp}.json'
+            now = datetime.now()
+            source_folder = ''.join(word.capitalize() for word in spider.name.split('_'))
+            date_dir = now.strftime('%Y-%m-%d')
+            if not self.sub_dir:
+                self.sub_dir = os.path.join(self.data_dir, date_dir, source_folder)
+                os.makedirs(self.sub_dir, exist_ok=True)
+            ms = now.strftime('%f')[:3]
+            ampm = now.strftime('%p').upper()
+            file_ts = now.strftime(f'%Y-%m-%d-%I-%M-%S-{ms}-{ampm}')
+            self.filename = os.path.join(self.sub_dir, f'{file_ts}.json')
         
         try:
             # Read existing items
@@ -100,6 +117,7 @@ class CsvExportPipeline:
     """Pipeline to export items to CSV files"""
     
     def __init__(self):
+        self.data_dir = os.environ.get('DATA_DIR', 'data')
         self.items = {
             'publishers': [],
             'series': [],
@@ -131,12 +149,12 @@ class CsvExportPipeline:
     
     def close_spider(self, spider):
         """Export all items to CSV when spider closes"""
-        os.makedirs('data', exist_ok=True)
+        os.makedirs(self.data_dir, exist_ok=True)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
         for item_type, items_list in self.items.items():
             if items_list:
-                filename = f'data/{item_type}_{timestamp}.csv'
+                filename = os.path.join(self.data_dir, f'{item_type}_{timestamp}.csv')
                 if items_list:
                     fieldnames = set()
                     for item_dict in items_list:

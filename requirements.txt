@@ -1,4 +1,10 @@
 scrapy>=2.11.0
 itemadapter>=0.8.0
 pytz>=2023.3; python_version < "3.9"
+fastapi>=0.110
+uvicorn>=0.22
+APScheduler>=3.10
+PyYAML>=6.0.1
+requests>=2.31.0
+pymysql>=1.1.0
 
