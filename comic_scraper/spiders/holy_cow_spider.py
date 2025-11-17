@@ -1,5 +1,5 @@
 """
-Spider for scraping Bullseye Press website (https://bullseyepress.in/)
+Spider for scraping Holy Cow Entertainment website (https://www.holycow.in/)
 This spider extracts publisher info, comics, series, and artist information.
 """
 from comic_scraper.spiders.base_spider import BaseComicSpider
@@ -8,18 +8,18 @@ from comic_scraper.utils.helpers import clean_text, normalize_list, extract_numb
 import re
 
 
-class BullseyePressSpider(BaseComicSpider):
+class HolyCowSpider(BaseComicSpider):
     """
-    Spider to scrape Bullseye Press website.
+    Spider to scrape Holy Cow Entertainment website.
     Extracts publisher information, comics, series, and artist data.
     
     Usage:
-        scrapy crawl bullseye_press
+        scrapy crawl holy_cow
     """
     
-    name = 'bullseye_press'
-    allowed_domains = ['bullseyepress.in']
-    start_urls = ['https://bullseyepress.in/shop/']
+    name = 'holy_cow'
+    allowed_domains = ['holycow.in']
+    start_urls = ['https://www.holycow.in/shop/']
     
     custom_settings = {
         'DOWNLOAD_DELAY': 2,
@@ -165,7 +165,7 @@ class BullseyePressSpider(BaseComicSpider):
                             pagination_links.add(full_url)
                             break  # Found a valid next page link
         
-        # Strategy 4: Construct next page URL manually if no pagination links found
+        # Strategy 3: Construct next page URL manually if no pagination links found
         # This ensures we continue pagination even if links aren't detected
         if not pagination_links:
             # Extract current page number
@@ -205,7 +205,7 @@ class BullseyePressSpider(BaseComicSpider):
                 pagination_links.add(next_page_url)
                 self.logger.info(f"Constructed next page URL: {next_page_url}")
         
-        # Strategy 3: Load more button (AJAX pagination) - only if it exists
+        # Strategy 4: Load more button (AJAX pagination) - only if it exists
         if not pagination_links:
             load_more_selectors = [
                 'a.load-more::attr(href)',
@@ -257,14 +257,14 @@ class BullseyePressSpider(BaseComicSpider):
     def extract_publisher_info(self, response):
         """Extract publisher information from the website"""
         item = PublisherItem()
-        item['name'] = 'Bullseye Press'
-        item['website'] = 'https://bullseyepress.in'
-        item['url'] = 'https://bullseyepress.in'
+        item['name'] = 'Holy Cow Entertainment'
+        item['website'] = 'https://www.holycow.in'
+        item['url'] = 'https://www.holycow.in'
         
         # Try to extract description from about page or footer
-        description = response.css('.site-description::text, footer p::text').get()
+        description = response.css('.site-description::text, footer p::text, .about-description::text').get()
         if not description:
-            description = 'Indian comic book publisher'
+            description = 'Pioneering and unique publisher of comics in India'
         item['description'] = clean_text(description)
         
         item = self.add_scraped_timestamp(item)
@@ -287,13 +287,13 @@ class BullseyePressSpider(BaseComicSpider):
             item['title'] = clean_text(title)
             
             # Extract publisher
-            item['publisher'] = 'Bullseye Press'
+            item['publisher'] = 'Holy Cow Entertainment'
             
             # Extract price information
             # WooCommerce typically structures prices as:
             # <span class="price">
-            #   <del><span class="woocommerce-Price-amount">₹449</span></del>  (original price)
-            #   <ins><span class="woocommerce-Price-amount">₹404</span></ins>  (discounted price)
+            #   <del><span class="woocommerce-Price-amount">₹599</span></del>  (original price)
+            #   <ins><span class="woocommerce-Price-amount">₹539</span></ins>  (discounted price)
             # </span>
             
             # Strategy 1: Extract original price from <del> tag (strikethrough)
@@ -338,69 +338,114 @@ class BullseyePressSpider(BaseComicSpider):
             
             # Extract description (actual story/plot description)
             # Check multiple locations where description might appear:
-            # 1. Short description area (above tabs)
-            # 2. Description tab panel (in WooCommerce tabs)
-            # 3. Description section after heading
             description_text = []
             
-            # Strategy 1: Check short description area (above tabs)
-            short_desc = response.css('.woocommerce-product-details__short-description p::text, .product-short-description p::text').getall()
-            if short_desc:
-                description_text.extend(short_desc)
+            # Strategy 1: Get all paragraphs from description tab panel (most reliable)
+            # Use XPath to get all p tags within the description panel, excluding the h2 heading
+            desc_tab_paragraphs = response.xpath(
+                '//div[contains(@class, "woocommerce-Tabs-panel--description")]//p[not(ancestor::table)]//text()'
+            ).getall()
+            if desc_tab_paragraphs:
+                # Clean and filter paragraph text
+                desc_tab_paragraphs = [t.strip() for t in desc_tab_paragraphs if t.strip()]
+                if desc_tab_paragraphs:
+                    description_text.extend(desc_tab_paragraphs)
             
-            # Strategy 2: Check Description tab panel (WooCommerce tabs)
-            desc_tab = response.css('.woocommerce-Tabs-panel--description p::text, .woocommerce-tabs .description p::text').getall()
-            if desc_tab:
-                description_text.extend(desc_tab)
-            
-            # Strategy 3: Check for description after "Description" heading (more general approach)
-            # Look for content after h2 or h3 with "Description" text using XPath
-            desc_after_heading = response.xpath('//h2[contains(text(), "Description")]/following-sibling::*[1]//p/text() | //h3[contains(text(), "Description")]/following-sibling::*[1]//p/text()').getall()
-            if desc_after_heading:
-                description_text.extend(desc_after_heading)
-            
-            # Strategy 4: If no paragraph text found, try getting direct text (but exclude table content)
+            # Strategy 2: If no paragraphs found, get all text from description tab (excluding h2 heading and tables)
             if not description_text:
-                # Get text from short description area
-                all_text = response.css('.woocommerce-product-details__short-description::text, .product-short-description::text').getall()
-                # Also check description tab
-                desc_tab_text = response.css('.woocommerce-Tabs-panel--description::text, .woocommerce-tabs .description::text').getall()
-                all_text.extend(desc_tab_text)
-                # Also try getting text after Description heading
-                desc_heading_text = response.xpath('//h2[contains(text(), "Description")]/following-sibling::*[1]//text() | //h3[contains(text(), "Description")]/following-sibling::*[1]//text()').getall()
-                all_text.extend(desc_heading_text)
-                # Filter out text that's part of tables or additional info
-                description_text = [t for t in all_text if t.strip() and len(t.strip()) > 10]
+                desc_tab_text = response.xpath(
+                    '//div[contains(@class, "woocommerce-Tabs-panel--description")]//text()[not(ancestor::h2) and not(ancestor::table)]'
+                ).getall()
+                desc_tab_text = [t.strip() for t in desc_tab_text if t.strip() and len(t.strip()) > 3]
+                if desc_tab_text:
+                    description_text.extend(desc_tab_text)
+            
+            # Strategy 3: Fallback to CSS selector for description tab paragraphs
+            if not description_text:
+                desc_tab_paragraphs_css = response.css('.woocommerce-Tabs-panel--description p::text, .woocommerce-tabs .description p::text').getall()
+                if desc_tab_paragraphs_css:
+                    desc_tab_paragraphs_css = [t.strip() for t in desc_tab_paragraphs_css if t.strip()]
+                    if desc_tab_paragraphs_css:
+                        description_text.extend(desc_tab_paragraphs_css)
+            
+            # Strategy 4: Check short description area (above tabs)
+            if not description_text:
+                short_desc = response.css('.woocommerce-product-details__short-description p::text, .product-short-description p::text').getall()
+                if short_desc:
+                    short_desc = [t.strip() for t in short_desc if t.strip()]
+                    if short_desc:
+                        description_text.extend(short_desc)
+                else:
+                    # Try getting all text from short description
+                    short_desc_text = response.css('.woocommerce-product-details__short-description::text, .product-short-description::text').getall()
+                    short_desc_text = [t.strip() for t in short_desc_text if t.strip() and len(t.strip()) > 3]
+                    if short_desc_text:
+                        description_text.extend(short_desc_text)
+            
+            # Strategy 5: Get text from description tab div directly using XPath (handles nested structures)
+            if not description_text:
+                desc_div_text = response.xpath(
+                    '//div[contains(@class, "woocommerce-Tabs-panel--description")]//text()[not(ancestor::h2) and not(ancestor::table) and not(ancestor::h3)]'
+                ).getall()
+                desc_div_text = [t.strip() for t in desc_div_text if t.strip() and len(t.strip()) > 3]
+                if desc_div_text:
+                    description_text.extend(desc_div_text)
             
             # Filter out text that's clearly not description (like "Add to cart", "Wishlist", etc.)
             filtered_description = []
             skip_keywords = [
-                'add to cart', 'wishlist', 'share', 'category', 'reviews', 
-                'logged in customers', 'writer', 'art', 'pages', 'quantity',
-                'there are no reviews', 'only logged in'
+                'add to cart', 'wishlist', 'share', 'quantity', 
+                'logged in customers', 'there are no reviews', 
+                'only logged in', 'you may also like', 'related products',
+                'description'  # Skip the heading text itself
             ]
             
             for text in description_text:
                 text_clean = clean_text(text)
-                if text_clean and len(text_clean) > 20:  # Only keep substantial text (story descriptions)
-                    text_lower = text_clean.lower()
-                    # Skip if it contains skip keywords or looks like metadata
-                    is_metadata = any(keyword in text_lower for keyword in skip_keywords)
-                    # Skip if it's too short or looks like a label
-                    is_label = len(text_clean.split()) <= 3 and ':' in text_clean
-                    
-                    if not is_metadata and not is_label:
-                        filtered_description.append(text_clean)
+                if not text_clean:
+                    continue
+                
+                text_lower = text_clean.lower().strip()
+                
+                # Skip empty or whitespace-only text
+                if not text_lower:
+                    continue
+                
+                # Skip if it's exactly "Description" (the heading)
+                if text_lower == 'description':
+                    continue
+                
+                # Skip very short single words that are likely navigation/UI elements
+                if len(text_lower.split()) <= 1 and len(text_lower) < 5:
+                    continue
+                
+                # Skip if it's clearly a UI element (short text with skip keywords)
+                is_ui_element = any(keyword in text_lower for keyword in skip_keywords) and len(text_clean) < 25
+                
+                # Skip if it looks like a label (very short with colon, but not part of a sentence)
+                is_label = len(text_clean.split()) <= 2 and ':' in text_clean and len(text_clean) < 25 and not text_clean.endswith('.')
+                
+                # Skip if it's just punctuation or special characters
+                text_without_punct = text_clean.replace('.', '').replace(',', '').replace('!', '').replace('?', '').replace(';', '').replace(':', '').replace('&nbsp;', '').strip()
+                is_punctuation_only = len(text_without_punct) == 0
+                
+                if not is_ui_element and not is_label and not is_punctuation_only:
+                    filtered_description.append(text_clean)
             
             if filtered_description:
-                # Join and clean up the description
+                # Join all text with spaces
                 full_description = ' '.join(filtered_description)
+                # Clean up multiple spaces and normalize whitespace
+                full_description = re.sub(r'\s+', ' ', full_description)
                 # Remove any trailing metadata that might have slipped through
-                full_description = re.sub(r'\s*(Writer|Art|Pages|Category).*$', '', full_description, flags=re.IGNORECASE)
+                full_description = re.sub(r'\s*(Writer|Art|Pages|Category|Additional Information|Description).*$', '', full_description, flags=re.IGNORECASE)
+                # Final cleanup
                 item['description'] = clean_text(full_description)
             elif description_text:
                 # Fallback: use all text but clean it
-                item['description'] = clean_text(' '.join(description_text))
+                full_description = ' '.join([clean_text(t) for t in description_text if clean_text(t) and clean_text(t).lower() != 'description'])
+                full_description = re.sub(r'\s+', ' ', full_description)
+                item['description'] = clean_text(full_description)
         
             # Extract additional information from the "Additional information" tab/table
             # This contains Writer, Art, Pages, etc.
@@ -499,7 +544,7 @@ class BullseyePressSpider(BaseComicSpider):
                 
                 # Extract uploaded_date from cover_image_url
                 # Pattern: /wp-content/uploads/{year}/{month}/...
-                # Example: https://bullseyepress.in/wp-content/uploads/2024/10/WhatsApp-Image-2024-10-30-at-10.41.34-PM-1-600x897.jpeg
+                # Example: https://www.holycow.in/wp-content/uploads/2024/10/...
                 uploaded_date_match = re.search(r'/wp-content/uploads/(\d{4})/(\d{1,2})/', cover_image_url)
                 if uploaded_date_match:
                     year = int(uploaded_date_match.group(1))
@@ -509,9 +554,18 @@ class BullseyePressSpider(BaseComicSpider):
                     item['listing_date'] = f"{year:04d}-{month:02d}-{day:02d}"
             
             # Extract series information from title
-            # Titles like "Raj Rahman 2", "Yagyaa Origins – Issue 5" contain series info
+            # Titles like "That Man Solomon: Born Again #4", "The Last Asuran Vol. 3: W.O.M.E. Stage 1" contain series info
             if item.get('title'):
-                series_match = re.search(r'^([^–\-0-9]+)', item['title'])
+                title = item['title']
+                
+                # Extract series name - stop at Issue, Vol./Volume, Stage, colon, dash, or hash
+                # Pattern: match everything from start until we hit Issue, Vol./Volume, Stage, :, –, -, or #
+                # Use non-greedy match to stop at the first occurrence
+                series_match = re.search(r'^(.+?)(?:\s+Issue\s+\d+|\s+Vol\.|\s+Vol\s+\d+|\s+Volume\s+\d+|\s+Volume\s+|\s+Stage\s+\d+|[:–\-#])', title, re.IGNORECASE)
+                if not series_match:
+                    # Fallback: if no Issue/Vol./Stage found, stop at colon, dash, or hash
+                    series_match = re.search(r'^([^:–\-#]+)', title)
+                
                 if series_match:
                     series_name = clean_text(series_match.group(1))
                     
@@ -521,6 +575,16 @@ class BullseyePressSpider(BaseComicSpider):
                     series_name = re.sub(r'\s+Hindi\s+', ' ', series_name, flags=re.IGNORECASE).strip()
                     series_name = re.sub(r'\s+English\s*$', '', series_name, flags=re.IGNORECASE).strip()
                     series_name = re.sub(r'\s+Hindi\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    
+                    # Remove Issue, Vol., Volume, Stage patterns that might have been captured
+                    series_name = re.sub(r'\s+Issue\s+\d+\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Issue\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Vol\.?\s+\d+\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Vol\.?\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Volume\s+\d+\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Volume\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Stage\s+\d+\s*$', '', series_name, flags=re.IGNORECASE).strip()
+                    series_name = re.sub(r'\s+Stage\s*$', '', series_name, flags=re.IGNORECASE).strip()
                     
                     # Then remove other suffixes like: Issue, Hardcover, Paperback, Variant Cover, etc.
                     invalid_suffixes = [
@@ -535,8 +599,8 @@ class BullseyePressSpider(BaseComicSpider):
                         r'\s+Hindi\s+Hardcover\s*$',  # "Hindi Hardcover" at the end
                         r'\s+English\s+Paperback\s*$',  # "English Paperback" at the end
                         r'\s+Hindi\s+Paperback\s*$',  # "Hindi Paperback" at the end
-                        r'\s+Combo\s+Issue\s*$',  # "Combo Issue" at the end
-                        r'\s+Combo\s*$',  # "Combo" at the end
+                        r'\s+Box\s+Set\s*$',  # "Box Set" at the end
+                        r'\s+Deluxe\s+Edition\s*$',  # "Deluxe Edition" at the end
                     ]
                     
                     for suffix_pattern in invalid_suffixes:
@@ -545,8 +609,7 @@ class BullseyePressSpider(BaseComicSpider):
                     # List of invalid series values to completely filter out
                     invalid_series_values = [
                         'Issue', 'issue', 'English', 'Hindi', 'Variant Cover', 'Variant',
-                        'Regular Cover', 'Issue 2', 'Issue 3', 'Issue 1-4', 'Combo of',
-                        'English Hardcover', 'Hindi Hardcover', 'English Paperback', 'Hindi Paperback'
+                        'Regular Cover', 'Box Set', 'Deluxe Edition', 'Born Again', 'Vol', 'Volume', 'Stage'
                     ]
                     
                     # Check if the cleaned series name is valid
@@ -557,20 +620,28 @@ class BullseyePressSpider(BaseComicSpider):
                         # If invalid, don't set series field (it won't appear in output)
                     
                     # Extract issue number
-                    issue_match = re.search(r'Issue\s+(\d+)', item['title'], re.IGNORECASE)
+                    issue_match = re.search(r'#(\d+)', item['title'], re.IGNORECASE)
                     if issue_match:
                         try:
                             item['issue'] = int(issue_match.group(1))
                         except ValueError:
                             pass
                     else:
-                        # Try to extract number from title (e.g., "Raj Rahman 2")
-                        num_match = re.search(r'\b(\d+)\b', item['title'])
-                        if num_match:
+                        # Try to extract number from title (e.g., "Vol. 3")
+                        vol_match = re.search(r'Vol\.\s*(\d+)', item['title'], re.IGNORECASE)
+                        if vol_match:
                             try:
-                                item['issue'] = int(num_match.group(1))
+                                item['issue'] = int(vol_match.group(1))
                             except ValueError:
                                 pass
+                        else:
+                            # Try to extract standalone number
+                            num_match = re.search(r'\b(\d+)\b', item['title'])
+                            if num_match:
+                                try:
+                                    item['issue'] = int(num_match.group(1))
+                                except ValueError:
+                                    pass
             
             # Extract language from title and description
             # Common languages: Hindi, English, and other possible variations
@@ -621,45 +692,77 @@ class BullseyePressSpider(BaseComicSpider):
             
             # Extract binding information (Hardbound, Paperback, Hardcover, etc.)
             binding = None
-            title_text = item.get('title', '')
             
-            # Strategy 1: Extract from title (most common location)
-            # Look for binding keywords in title
-            binding_patterns = [
-                (r'\b(hardbound|hard\s*bound)\b', 'Hardbound'),
-                (r'\b(paperback|paper\s*back)\b', 'Paperback'),
-                (r'\b(hardcover|hard\s*cover)\b', 'Hardcover'),
-                (r'\b(softcover|soft\s*cover)\b', 'Softcover'),
-            ]
-            
-            for pattern, binding_value in binding_patterns:
-                if re.search(pattern, title_text, re.IGNORECASE):
-                    binding = binding_value
-                    break
-            
-            # Strategy 2: Check additional_info section
-            if not binding and item.get('additional_info'):
+            # Strategy 1: Check additional_info section first (most reliable)
+            if item.get('additional_info'):
                 additional_info_dict = item.get('additional_info', {})
-                # Check all values in additional_info for binding keywords
-                for key, value in additional_info_dict.items():
-                    value_lower = str(value).lower()
-                    if 'hardbound' in value_lower or 'hard bound' in value_lower:
+                
+                # First, check if there's a "Binding" key directly
+                binding_text = additional_info_dict.get('Binding') or additional_info_dict.get('binding')
+                if binding_text:
+                    binding_text_lower = str(binding_text).lower().strip()
+                    # Normalize binding values
+                    if 'hardbound' in binding_text_lower or 'hard bound' in binding_text_lower:
                         binding = 'Hardbound'
-                        break
-                    elif 'paperback' in value_lower or 'paper back' in value_lower:
+                    elif 'paperback' in binding_text_lower or 'paper back' in binding_text_lower:
                         binding = 'Paperback'
-                        break
-                    elif 'hardcover' in value_lower or 'hard cover' in value_lower:
+                    elif 'hardcover' in binding_text_lower or 'hard cover' in binding_text_lower or 'hc' in binding_text_lower:
                         binding = 'Hardcover'
-                        break
-                    elif 'softcover' in value_lower or 'soft cover' in value_lower:
+                    elif 'softcover' in binding_text_lower or 'soft cover' in binding_text_lower:
                         binding = 'Softcover'
+                    elif 'deluxe' in binding_text_lower:
+                        binding = 'Deluxe Edition'
+                    else:
+                        # If it's a valid binding value but doesn't match patterns, use it as-is (capitalized)
+                        binding = binding_text.strip()
+                
+                # If no "Binding" key, check all values in additional_info for binding keywords
+                if not binding:
+                    for key, value in additional_info_dict.items():
+                        value_lower = str(value).lower()
+                        if 'hardbound' in value_lower or 'hard bound' in value_lower:
+                            binding = 'Hardbound'
+                            break
+                        elif 'paperback' in value_lower or 'paper back' in value_lower:
+                            binding = 'Paperback'
+                            break
+                        elif 'hardcover' in value_lower or 'hard cover' in value_lower:
+                            binding = 'Hardcover'
+                            break
+                        elif 'softcover' in value_lower or 'soft cover' in value_lower:
+                            binding = 'Softcover'
+                            break
+                        elif 'deluxe' in value_lower:
+                            binding = 'Deluxe Edition'
+                            break
+            
+            # Strategy 2: Extract from title (fallback)
+            if not binding:
+                title_text = item.get('title', '')
+                binding_patterns = [
+                    (r'\b(hardbound|hard\s*bound)\b', 'Hardbound'),
+                    (r'\b(paperback|paper\s*back)\b', 'Paperback'),
+                    (r'\b(hardcover|hard\s*cover|hc)\b', 'Hardcover'),
+                    (r'\b(softcover|soft\s*cover)\b', 'Softcover'),
+                    (r'\b(deluxe\s*edition)\b', 'Deluxe Edition'),
+                ]
+                
+                for pattern, binding_value in binding_patterns:
+                    if re.search(pattern, title_text, re.IGNORECASE):
+                        binding = binding_value
                         break
             
             # Strategy 3: Check description as fallback
             if not binding:
                 desc_text = item.get('description', '')
                 if desc_text:
+                    binding_patterns = [
+                        (r'\b(hardbound|hard\s*bound)\b', 'Hardbound'),
+                        (r'\b(paperback|paper\s*back)\b', 'Paperback'),
+                        (r'\b(hardcover|hard\s*cover|hc)\b', 'Hardcover'),
+                        (r'\b(softcover|soft\s*cover)\b', 'Softcover'),
+                        (r'\b(deluxe\s*edition)\b', 'Deluxe Edition'),
+                    ]
                     for pattern, binding_value in binding_patterns:
                         if re.search(pattern, desc_text, re.IGNORECASE):
                             binding = binding_value
@@ -667,9 +770,6 @@ class BullseyePressSpider(BaseComicSpider):
             
             if binding:
                 item['binding'] = binding
-            
-            # Extract variant information (e.g., "Regular Cover", "Action figure variant")
-            variant_match = re.search(r'(variant|cover|hardbound|paperback|hardcover)', item.get('title', ''), re.IGNORECASE)
             
             # Extract page count from multiple sources
             page_count = None
@@ -693,31 +793,6 @@ class BullseyePressSpider(BaseComicSpider):
                             page_count = int(page_match.group(1))
                         except (ValueError, TypeError):
                             pass
-                    
-                    # Pattern 2: Look for standalone numbers at the end (common pattern: "Name Name Name 64")
-                    if not page_count:
-                        # Split description and check the last few words
-                        words = desc_text.strip().split()
-                        # Check last 3 words for a number that could be page count
-                        for word in reversed(words[-3:]):
-                            # Remove any trailing punctuation
-                            clean_word = word.strip('.,;:!?')
-                            if clean_word.isdigit():
-                                num = int(clean_word)
-                                if num > 0:
-                                    page_count = num
-                                    break
-                    
-                    # Pattern 3: Look for any number in description (fallback)
-                    if not page_count:
-                        numbers = re.findall(r'\b(\d+)\b', desc_text)
-                        if numbers:
-                            # Prefer numbers that appear after names (likely page count)
-                            for num_str in reversed(numbers):  # Check from end first
-                                num = int(num_str)
-                                if num > 0:
-                                    page_count = num
-                                    break
             
             # Also check product meta and additional info sections
             if not page_count:
@@ -731,25 +806,8 @@ class BullseyePressSpider(BaseComicSpider):
                         except (ValueError, TypeError):
                             pass
             
-            # Also check the full response text for page information
-            if not page_count:
-                full_text = response.text
-                # Look for patterns like "Pages: 64", "64 pages", etc.
-                page_match = re.search(r'(?:pages?|pgs?)[:\s]+(\d+)\b', full_text, re.IGNORECASE)
-                if page_match:
-                    try:
-                        num = int(page_match.group(1))
-                        if num > 0:
-                            page_count = num
-                    except (ValueError, TypeError):
-                        pass
-            
-            if page_count:
+            if page_count and page_count > 0:
                 item['pages'] = page_count
-            
-            # Extract additional product details from WooCommerce tabs
-            # Check for additional information tabs
-            additional_info = response.css('.woocommerce-Tabs-panel--additional_information, .product_meta').get()
             
             # Extract SKU, ISBN if available
             isbn = response.css('.sku::text, [data-isbn]::attr(data-isbn)').get()
@@ -767,14 +825,13 @@ class BullseyePressSpider(BaseComicSpider):
                 'there', 'are', 'no', 'reviews', 'yet', 'only', 'may', 'leave',
                 'hand', 'painted', 'variant', 'cover', 'wraparound', 'poster',
                 'homage', 'action', 'figure', 'regular', 'hardbound', 'paperback',
-                'hardcover', 'english', 'hindi', 'issue', 'shot', 'one'
+                'hardcover', 'english', 'hindi', 'issue', 'shot', 'one', 'box', 'set'
             ]
             
             # Strategy 1: Extract from title if it mentions "by [Artist]"
             title_text = item.get('title', '')
             if title_text:
                 # Pattern: "Title by Artist Name" or "Title variant by Artist"
-                # Handle patterns like "Title - variant by Artist Name" or "Title by Artist Name"
                 by_match = re.search(r'\bby\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', title_text, re.IGNORECASE)
                 if by_match:
                     artist_name = clean_text(by_match.group(1))
@@ -784,82 +841,17 @@ class BullseyePressSpider(BaseComicSpider):
                         artists.append(artist_name)
             
             # Strategy 1b: Extract from URL slug if title doesn't have "by"
-            # Example: "raj-rahman-2-english-regular-cover-by-deepjoy-subba"
             if not artists:
                 url_slug = response.url.split('/')[-2] if response.url.endswith('/') else response.url.split('/')[-1]
                 by_in_url = re.search(r'-by-([a-z]+(?:-[a-z]+)+)', url_slug, re.IGNORECASE)
                 if by_in_url:
-                    # Convert "deepjoy-subba" to "Deepjoy Subba"
+                    # Convert "artist-name" to "Artist Name"
                     artist_slug = by_in_url.group(1)
                     artist_name = ' '.join(word.capitalize() for word in artist_slug.split('-'))
                     artist_lower = artist_name.lower()
                     is_invalid = any(keyword in artist_lower for keyword in invalid_keywords)
                     if artist_name and len(artist_name) > 2 and not is_invalid:
                         artists.append(artist_name)
-            
-            # Strategy 2: Extract from product description (only if no artists found yet)
-            # This is less reliable as descriptions often contain character names, not artist names
-            # Only use this as a last resort if artists weren't found in additional_info or title
-            if not item.get('artists') and not artists:
-                desc_text = item.get('description', '')
-                if desc_text:
-                    # Remove common review text that appears at the end
-                    desc_text = re.sub(r'There are no reviews yet.*', '', desc_text, flags=re.IGNORECASE)
-                    desc_text = re.sub(r'Only logged in customers.*', '', desc_text, flags=re.IGNORECASE)
-                    
-                    # Look for explicit artist mentions in description
-                    # Pattern: "by Artist Name" or "Artist: Name" or "Art by Name"
-                    explicit_artist_patterns = [
-                        r'\b(?:by|artist|art by|artwork by|illustrated by|drawn by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
-                        r'(?:artist|artwork|illustrator)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
-                    ]
-                    
-                    for pattern in explicit_artist_patterns:
-                        artist_match = re.search(pattern, desc_text, re.IGNORECASE)
-                        if artist_match:
-                            artist_name = clean_text(artist_match.group(1))
-                            artist_lower = artist_name.lower()
-                            is_invalid = any(keyword in artist_lower for keyword in invalid_keywords)
-                            if artist_name and len(artist_name) > 2 and not is_invalid:
-                                artists.append(artist_name)
-                                break
-                    
-                    # Only extract from description text if we found explicit mentions
-                    # Don't extract random capitalized words as they're likely character names
-            
-            # Strategy 3: Extract from product meta fields (WooCommerce specific)
-            product_meta = response.css('.product_meta, .woocommerce-product-details__short-description').get() or ''
-            if product_meta:
-                # Look for explicit meta labels only (avoid generic capitalized names)
-                meta_text = ' '.join(response.css('.product_meta *::text, .woocommerce-product-details__short-description *::text').getall())
-                if meta_text:
-                    explicit_meta_patterns = [
-                        r'\b(?:artist|art|art by|artwork by|illustrated by|drawn by)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
-                    ]
-                    for pattern in explicit_meta_patterns:
-                        m = re.search(pattern, meta_text, re.IGNORECASE)
-                        if m:
-                            name = clean_text(m.group(1))
-                            name_lower = name.lower()
-                            is_invalid = any(keyword in name_lower for keyword in invalid_keywords)
-                            if not is_invalid and len(name) > 3 and name not in artists:
-                                artists.append(name)
-            
-            # Strategy 4: Extract cover artist from title if mentioned
-            if title_text:
-                cover_patterns = [
-                    r'cover\s+(?:by|artist)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                    r'variant\s+by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-                ]
-                for pattern in cover_patterns:
-                    cover_match = re.search(pattern, title_text, re.IGNORECASE)
-                    if cover_match:
-                        cover_artist = clean_text(cover_match.group(1))
-                        if cover_artist and len(cover_artist) > 2:
-                            item['cover_artist'] = cover_artist
-                            if cover_artist not in artists:
-                                artists.append(cover_artist)
-                            break
             
             # Clean and deduplicate artists
             # Only set artists from description if they weren't already set from additional_info
@@ -884,21 +876,8 @@ class BullseyePressSpider(BaseComicSpider):
                 if unique_artists:
                     item['artists'] = normalize_list(unique_artists)
             
-            # Extract genre (could be manga, comic, etc.)
-            # Check product categories
-            categories = response.css('.product-categories a::text, .posted_in a::text').getall()
-            if categories:
-                # Filter out "Uncategorized" and empty values
-                genres = [clean_text(cat) for cat in categories if cat and clean_text(cat).lower() != 'uncategorized']
-                # Only set genre if we have valid genres (not empty)
-                if genres:
-                    item['genre'] = normalize_list(genres)
-                else:
-                    # Set empty array if no valid genres found
-                    item['genre'] = []
-            else:
-                # Set empty array if no categories found
-                item['genre'] = []
+            # Extract genre - set to empty array for Holy Cow
+            item['genre'] = []
             
             # Store URL
             item['url'] = response.url
@@ -916,7 +895,7 @@ class BullseyePressSpider(BaseComicSpider):
                     title = response.css('h1::text').get()
                     if title:
                         item['title'] = clean_text(title)
-                        item['publisher'] = 'Bullseye Press'
+                        item['publisher'] = 'Holy Cow Entertainment'
                 except:
                     return
         
@@ -934,7 +913,7 @@ class BullseyePressSpider(BaseComicSpider):
             try:
                 series_item = SeriesItem()
                 series_item['title'] = item['series']
-                series_item['publisher'] = 'Bullseye Press'
+                series_item['publisher'] = 'Holy Cow Entertainment'
                 series_item['url'] = response.url
                 series_item = self.add_scraped_timestamp(series_item)
                 series_item = self.clean_item(series_item)

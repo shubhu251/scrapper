@@ -3,7 +3,7 @@ import subprocess
 import sys
 import json
 import logging
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from datetime import datetime
 
 from .notifier import send_telegram_message
@@ -58,6 +58,8 @@ def _infer_source_name(spider_name: str) -> str:
     """Map spider name to human-readable source name."""
     if spider_name == "bullseye_press":
         return "Bullseye Press"
+    elif spider_name == "holy_cow":
+        return "Holy Cow Entertainment"
     # Fallback: capitalize parts
     return " ".join(part.capitalize() for part in spider_name.split("_"))
 

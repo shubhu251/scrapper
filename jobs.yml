@@ -5,4 +5,8 @@ jobs:
     # 01:00 IST daily
     cron: "0 1 * * *"
 
-
+  - id: holy_cow_daily
+    type: spider
+    target: holy_cow
+    # 01:15 IST daily
+    cron: "15 1 * * *"
