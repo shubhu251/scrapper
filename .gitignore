@@ -39,4 +39,9 @@ data/
 # OS
 .DS_Store
 Thumbs.db
-
+# Logs
+*.log
+logs/
+.env
+app.log
+data/
