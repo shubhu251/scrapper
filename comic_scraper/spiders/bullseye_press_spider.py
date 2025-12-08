@@ -5,6 +5,7 @@ This spider extracts publisher info, comics, series, and artist information.
 from comic_scraper.spiders.base_spider import BaseComicSpider
 from comic_scraper.items import PublisherItem, ComicItem, SeriesItem, ArtistItem
 from comic_scraper.utils.helpers import clean_text, normalize_list, extract_numbers, parse_date
+from comic_scraper.constants import MIN_PAGES, MAX_PAGES
 import re
 
 
@@ -488,8 +489,14 @@ class BullseyePressSpider(BaseComicSpider):
                 if pages_text and not item.get('pages'):
                     # Extract number from text (handles cases like "68 Pages", "68", etc.)
                     pages_value = extract_numbers(pages_text)
-                    if pages_value and int(pages_value) > 0:
-                        item['pages'] = int(pages_value)
+                    if pages_value:
+                        try:
+                            pages_int = int(pages_value)
+                            # Validate page count using constants
+                            if MIN_PAGES <= pages_int <= MAX_PAGES:
+                                item['pages'] = pages_int
+                        except (ValueError, TypeError):
+                            pass
             
             # Extract product image (cover image)
             cover_image = response.css('.woocommerce-product-gallery__image img::attr(src), .product-image img::attr(src), img.wp-post-image::attr(src)').get()
@@ -690,7 +697,10 @@ class BullseyePressSpider(BaseComicSpider):
                     page_match = re.search(r'\b(\d+)\s*(?:pages?|pgs?|p\.?)\b', desc_text, re.IGNORECASE)
                     if page_match:
                         try:
-                            page_count = int(page_match.group(1))
+                            num = int(page_match.group(1))
+                            # Validate page count using constants
+                            if MIN_PAGES <= num <= MAX_PAGES:
+                                page_count = num
                         except (ValueError, TypeError):
                             pass
                     
@@ -704,7 +714,8 @@ class BullseyePressSpider(BaseComicSpider):
                             clean_word = word.strip('.,;:!?')
                             if clean_word.isdigit():
                                 num = int(clean_word)
-                                if num > 0:
+                                # Validate page count using constants
+                                if MIN_PAGES <= num <= MAX_PAGES:
                                     page_count = num
                                     break
                     
@@ -715,7 +726,8 @@ class BullseyePressSpider(BaseComicSpider):
                             # Prefer numbers that appear after names (likely page count)
                             for num_str in reversed(numbers):  # Check from end first
                                 num = int(num_str)
-                                if num > 0:
+                                # Validate page count using constants
+                                if MIN_PAGES <= num <= MAX_PAGES:
                                     page_count = num
                                     break
             
@@ -727,7 +739,10 @@ class BullseyePressSpider(BaseComicSpider):
                     page_match = re.search(r'\b(\d+)\s*(?:pages?|pgs?|p\.?)\b', meta_text, re.IGNORECASE)
                     if page_match:
                         try:
-                            page_count = int(page_match.group(1))
+                            num = int(page_match.group(1))
+                            # Validate page count using constants
+                            if MIN_PAGES <= num <= MAX_PAGES:
+                                page_count = num
                         except (ValueError, TypeError):
                             pass
             
@@ -739,7 +754,8 @@ class BullseyePressSpider(BaseComicSpider):
                 if page_match:
                     try:
                         num = int(page_match.group(1))
-                        if num > 0:
+                        # Validate page count using constants
+                        if MIN_PAGES <= num <= MAX_PAGES:
                             page_count = num
                     except (ValueError, TypeError):
                         pass

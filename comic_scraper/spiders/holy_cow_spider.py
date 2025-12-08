@@ -5,6 +5,7 @@ This spider extracts publisher info, comics, series, and artist information.
 from comic_scraper.spiders.base_spider import BaseComicSpider
 from comic_scraper.items import PublisherItem, ComicItem, SeriesItem, ArtistItem
 from comic_scraper.utils.helpers import clean_text, normalize_list, extract_numbers, parse_date
+from comic_scraper.constants import MIN_PAGES, MAX_PAGES
 import re
 
 
@@ -533,8 +534,14 @@ class HolyCowSpider(BaseComicSpider):
                 if pages_text and not item.get('pages'):
                     # Extract number from text (handles cases like "68 Pages", "68", etc.)
                     pages_value = extract_numbers(pages_text)
-                    if pages_value and int(pages_value) > 0:
-                        item['pages'] = int(pages_value)
+                    if pages_value:
+                        try:
+                            pages_int = int(pages_value)
+                            # Validate page count using constants
+                            if MIN_PAGES <= pages_int <= MAX_PAGES:
+                                item['pages'] = pages_int
+                        except (ValueError, TypeError):
+                            pass
             
             # Extract product image (cover image)
             cover_image = response.css('.woocommerce-product-gallery__image img::attr(src), .product-image img::attr(src), img.wp-post-image::attr(src)').get()

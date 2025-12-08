@@ -60,6 +60,8 @@ def _infer_source_name(spider_name: str) -> str:
         return "Bullseye Press"
     elif spider_name == "holy_cow":
         return "Holy Cow Entertainment"
+    elif spider_name == "comics_adda":
+        return "ComicsAdda"
     # Fallback: capitalize parts
     return " ".join(part.capitalize() for part in spider_name.split("_"))
 
